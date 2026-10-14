@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D 溫馨諮商室漫步 | Cozy Counseling Room 3D</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        warm: {
+                            50: '#fdfbf7',
+                            100: '#f7f2e8',
+                            200: '#eee3d0',
+                            300: '#e1cdb0',
+                            400: '#d1b18a',
+                            500: '#be9266',
+                            600: '#a87850',
+                            700: '#8c5e3f',
+                            800: '#724b37',
+                            900: '#5e3f30',
+                            950: '#332018',
+                        },
+                        sage: {
+                            300: '#b2c8ba',
+                            400: '#8fae9c',
+                            500: '#6c937d',
+                            600: '#527561',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 3s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px)' },
+                            '50%': { transform: 'translateY(-6px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Three.js 3D Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 20, 15, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(190, 146, 102, 0.4);
+            border-radius: 4px;
+        }
+        .glow-box {
+            box-shadow: 0 0 25px -5px rgba(209, 177, 138, 0.3);
+        }
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        @keyframes ripple {
+            0% { transform: scale(0.2); opacity: 0.9; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .click-ripple {
+            position: absolute;
+            border-radius: 50%;
+            border: 2px solid rgba(247, 242, 232, 0.8);
+            box-shadow: 0 0 20px rgba(190, 146, 102, 0.6);
+            pointer-events: none;
+            animation: ripple 0.6s ease-out forwards;
+            z-index: 40;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased overflow-hidden select-none bg-stone-950">
+
+    <!-- Header Overlay -->
+    <header class="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3 md:p-4 md:px-8 bg-gradient-to-b from-stone-950/90 via-stone-950/40 to-transparent backdrop-blur-xs pointer-events-auto">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-warm-500/20 border border-warm-400/40 flex items-center justify-center text-warm-300 glow-box shrink-0">
+                <i data-lucide="footprints" class="w-5 h-5 animate-pulse"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm md:text-lg tracking-wider text-warm-100 flex items-center gap-2">
+                    心靈平靜 3D 諮商室 <span class="text-[10px] md:text-xs text-warm-300 font-normal px-2 py-0.5 rounded-full bg-warm-500/15 border border-warm-400/30">自由漫步版</span>
+                </h1>
+                <p class="text-xs text-stone-300 hidden sm:block">拖曳旋轉視角 · 點擊地面行走 · 使用 WASD / 鍵盤方向鍵移動</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 md:gap-3">
+            <!-- Location Indicator -->
+            <div class="flex items-center gap-2 bg-stone-900/80 border border-stone-800 rounded-full px-3 py-1.5 text-xs text-stone-200">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-warm-400"></i>
+                <span class="hidden sm:inline">角落:</span>
+                <strong id="location-index-text" class="text-warm-300 font-semibold">1</strong> / <span id="total-locations-count">5</span>
+            </div>
+
+            <!-- Auto-Tour Button -->
+            <button id="autotour-btn" class="flex items-center gap-1.5 bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:border-stone-700 text-xs px-3 py-1.5 rounded-full transition text-stone-200">
+                <i data-lucide="play" class="w-3.5 h-3.5 text-warm-400" id="autotour-icon"></i>
+                <span id="autotour-text" class="hidden sm:inline">自動巡航</span>
+            </button>
+
+            <!-- Audio Ambient Toggle -->
+            <button id="audio-toggle" class="flex items-center justify-center w-8 h-8 md:w-9 md:h-9 rounded-full bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-stone-300 transition hover:text-warm-300">
+                <i data-lucide="volume-x" class="w-4 h-4" id="audio-icon"></i>
+            </button>
+
+            <!-- Room Info Modal Trigger -->
+            <button id="info-toggle" class="flex items-center gap-1.5 bg-warm-500/15 hover:bg-warm-500/25 border border-warm-400/40 text-warm-200 text-xs px-3 py-1.5 rounded-full transition glow-box">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-warm-300"></i>
+                <span class="hidden md:inline">空間設計理念</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 3D Viewport -->
+    <main class="relative flex-1 w-full h-full cursor-grab active:cursor-grabbing overflow-hidden" id="viewport">
+        <!-- 3D Canvas -->
+        <canvas id="three-canvas" class="w-full h-full block"></canvas>
+
+        <!-- Dynamic Controls Guide Hint -->
+        <div id="controls-hint" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-opacity duration-700">
+            <div class="bg-stone-900/85 border border-warm-400/40 px-4 py-2 rounded-full backdrop-blur-md text-stone-200 text-xs flex items-center gap-3 shadow-xl">
+                <span class="flex items-center gap-1 text-warm-300 font-medium">
+                    <i data-lucide="move" class="w-3.5 h-3.5"></i> 按住滑鼠拖曳旋轉視角
+                </span>
+                <span class="text-stone-500">|</span>
+                <span class="flex items-center gap-1 text-warm-300 font-medium">
+                    <i data-lucide="footprints" class="w-3.5 h-3.5"></i> 點擊地面即可行走抵達
+                </span>
+            </div>
+        </div>
+
+        <!-- Hotspot Floating Toast -->
+        <div id="hotspot-hint" class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none opacity-0 transition-all duration-500 flex flex-col items-center">
+            <div class="bg-warm-600/30 border border-warm-400/70 px-4 py-2 rounded-full backdrop-blur-md text-warm-100 text-sm flex items-center gap-2 shadow-lg animate-bounce">
+                <i data-lucide="compass" class="w-4 h-4 text-warm-300"></i>
+                <span id="hotspot-text">步行至目標角落</span>
+            </div>
+        </div>
+
+        <!-- On-screen D-Pad for Mobile Walk -->
+        <div class="absolute bottom-28 left-4 z-20 md:hidden flex flex-col items-center gap-1 opacity-80 pointer-events-auto">
+            <button id="btn-walk-forward" class="w-10 h-10 rounded-full bg-stone-900/80 border border-stone-700 text-warm-300 flex items-center justify-center active:bg-warm-500 active:text-stone-950">
+                <i data-lucide="chevron-up" class="w-6 h-6"></i>
+            </button>
+            <div class="flex items-center gap-1">
+                <button id="btn-turn-left" class="w-10 h-10 rounded-full bg-stone-900/80 border border-stone-700 text-warm-300 flex items-center justify-center active:bg-warm-500 active:text-stone-950">
+                    <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                </button>
+                <button id="btn-walk-backward" class="w-10 h-10 rounded-full bg-stone-900/80 border border-stone-700 text-warm-300 flex items-center justify-center active:bg-warm-500 active:text-stone-950">
+                    <i data-lucide="chevron-down" class="w-6 h-6"></i>
+                </button>
+                <button id="btn-turn-right" class="w-10 h-10 rounded-full bg-stone-900/80 border border-stone-700 text-warm-300 flex items-center justify-center active:bg-warm-500 active:text-stone-950">
+                    <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Room Information & Reflection Card -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-2xl z-20 pointer-events-none">
+            <div id="reflection-card" class="bg-stone-900/90 border border-stone-700 hover:border-warm-400/50 rounded-2xl p-4 md:p-6 backdrop-blur-lg shadow-2xl transition-all duration-500 transform translate-y-2 opacity-95 pointer-events-auto relative">
+                <!-- Location Header -->
+                <div class="flex items-center justify-between mb-2">
+                    <span id="spot-tag" class="text-[10px] md:text-[11px] font-semibold tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-warm-500/20 border border-warm-400/30 text-warm-300">
+                        第一站：諮商室入口
+                    </span>
+                    <span class="text-xs text-stone-400 flex items-center gap-1">
+                        <i data-lucide="sun" class="w-3.5 h-3.5 text-warm-400"></i> <span id="spot-mood">溫暖且包容的氣氛</span>
+                    </span>
+                </div>
+
+                <!-- Title & Reflection Text -->
+                <h2 id="spot-title" class="text-base md:text-xl font-bold text-warm-100 mb-1.5 leading-tight">
+                    歡迎來到心靈庇護所
+                </h2>
+                <p id="spot-body" class="text-xs md:text-sm text-stone-200 leading-relaxed mb-3">
+                    這裡設計為一個充滿暖色調、木質紋理與自然植物的私密空間。你可以點擊地面任意處向前走動，或滑鼠按住拖曳來轉動視角。
+                </p>
+
+                <!-- Interactive Mindful Tip Box -->
+                <div id="mindful-box" class="mb-3 p-3 bg-stone-950/70 rounded-xl border border-stone-800/80 flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-lg bg-sage-500/20 border border-sage-400/30 flex items-center justify-center text-sage-300 shrink-0 mt-0.5">
+                        <i data-lucide="smile" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-semibold text-warm-200 mb-0.5" id="tip-title">安心小叮嚀</h4>
+                        <p class="text-[11px] md:text-xs text-stone-300 leading-normal" id="tip-desc">試著深呼吸三次，將肩頸放鬆。這裡沒有批判，只有接納與理解。</p>
+                    </div>
+                </div>
+
+                <!-- Navigation Action Buttons -->
+                <div class="flex items-center justify-between pt-2 border-t border-stone-800">
+                    <button id="prev-btn" class="flex items-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-medium px-3 py-1.5 rounded-xl text-xs transition border border-stone-700">
+                        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                        <span>上一角</span>
+                    </button>
+
+                    <div class="flex items-center gap-1">
+                        <!-- Spot Selectors Dots -->
+                        <div class="flex items-center gap-1.5 mx-2" id="spots-dots-container">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+
+                    <button id="next-btn" class="flex items-center gap-1.5 bg-warm-500 hover:bg-warm-400 text-stone-950 font-semibold px-3.5 py-1.5 rounded-xl text-xs md:text-sm transition shadow-lg hover:shadow-warm-500/20">
+                        <span>走向下個角落</span>
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Info Modal -->
+    <div id="info-modal" class="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300" id="info-modal-content">
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-stone-800 flex items-center justify-between bg-stone-900/60">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-warm-500/20 border border-warm-400/30 flex items-center justify-center text-warm-300">
+                        <i data-lucide="home" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-stone-100">諮商室環境心理學與設計</h3>
+                        <p class="text-xs text-stone-400">營造安全、放鬆與探索感的空間原則</p>
+                    </div>
+                </div>
+                <button id="close-info" class="w-8 h-8 rounded-full bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 flex items-center justify-center transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="p-6 overflow-y-auto space-y-4 text-xs text-stone-300 leading-relaxed">
+                <div class="bg-stone-950/60 border border-stone-800 rounded-xl p-4 space-y-2">
+                    <h4 class="text-sm font-semibold text-warm-300 flex items-center gap-2">
+                        <i data-lucide="palette" class="w-4 h-4"></i> 色彩與光照（Color & Lighting）
+                    </h4>
+                    <p>使用大地色系（米色、淺木色、柔和綠色）能有效降低交感神經的緊張感。溫暖的落地燈與間接光源提供柔和光芒，避免冷冽耀眼的直射光，讓人感到被包覆與安心。</p>
+                </div>
+
+                <div class="bg-stone-950/60 border border-stone-800 rounded-xl p-4 space-y-2">
+                    <h4 class="text-sm font-semibold text-warm-300 flex items-center gap-2">
+                        <i data-lucide="armchair" class="w-4 h-4"></i> 座椅配置與視覺角度
+                    </h4>
+                    <p>諮商師與來訪者的沙發呈現約 45 度至 90 度的斜角配置，避免直視的壓迫感，同時保持眼神交流的自然性。桌上配有面紙盒、溫水與沙漏，隨時給予無條件的關懷。</p>
+                </div>
+
+                <div class="bg-stone-950/60 border border-stone-800 rounded-xl p-4 space-y-2">
+                    <h4 class="text-sm font-semibold text-warm-300 flex items-center gap-2">
+                        <i data-lucide="flower-2" class="w-4 h-4"></i> 自然元素（Biophilic Design）
+                    </h4>
+                    <p>引進琴葉榕與綠植，並搭配帶有生機的景觀畫與地毯。研究指出，將自然元素導入室內能有效提升情緒調適力，緩和內心焦慮。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const ROOM_SPOTS = [
+            {
+                tag: "第一站：諮商室入口",
+                mood: "平靜與接納",
+                title: "歡迎來到心靈庇護所",
+                body: "這是一個專為你打造的溫馨諮商空間。空間採用大地色系與柔和燈光，協助你卸下生活中的防備與疲憊。",
+                tipTitle: "呼吸調整",
+                tipDesc: "在踏入這裡之前，先給自己一個深深的吸氣與吐氣，感受當下的安定。",
+                pos: { x: 0.0, z: 4.2 },
+                yaw: 0,
+                pitch: -0.05
+            },
+            {
+                tag: "第二站：主談話沙發區",
+                mood: "傾聽與安全對話",
+                title: "溫馨對話與對坐角",
+                body: "舒適的布藝沙發與斜角單人椅，提供無壓力的對談距離。茶几桌上放置著面紙與溫水，隨時支持你的情緒抒發。",
+                tipTitle: "對話與傾聽",
+                tipDesc: "在這裡，你的每一個感受與故事都值得被細心聆聽與尊重。",
+                pos: { x: -0.6, z: 0.8 },
+                yaw: Math.PI * 0.25,
+                pitch: -0.15
+            },
+            {
+                tag: "第三站：陽光窗邊植物角",
+                mood: "沉思與自然沉浸",
+                title: "陽光與生機綠植區",
+                body: "透光的紗簾過濾出溫柔的自然光，陪伴著生機盎然的綠色植物。站在窗邊，遠眺視線能帶給心靈更廣闊的空間。",
+                tipTitle: "視野開闊",
+                tipDesc: "當困惑時，試著將目光放遠，給自己的思緒一點擴張的空間。",
+                pos: { x: 2.2, z: -1.2 },
+                yaw: -Math.PI * 0.45,
+                pitch: 0.0
+            },
+            {
+                tag: "第四站：閱覽與智慧書架",
+                mood: "知識與自我覺察",
+                title: "心理學與心靈閱覽角",
+                body: "實木書架上擺放著心理學、正念與自我成長書籍，提供探索自我與獲得啟發的養分。",
+                tipTitle: "尋找解答",
+                tipDesc: "書本如同鏡子，有時一句話就能為困惑已久的內心解鎖新視角。",
+                pos: { x: -2.2, z: -2.2 },
+                yaw: Math.PI * 0.6,
+                pitch: -0.05
+            },
+            {
+                tag: "第五站：角落寫作與記錄桌",
+                mood: "整理與自我整合",
+                title: "書寫與沉澱角",
+                body: "簡約的木桌配有暖光檯燈，讓你可以記錄下談話中的頓悟與感受，將內心的想法化為具體的文字。",
+                tipTitle: "文字的力量",
+                tipDesc: "寫下你的情緒，就是將混沌轉化為清晰的第一步。",
+                pos: { x: 0.0, z: -3.4 },
+                yaw: Math.PI,
+                pitch: -0.2
+            }
+        ];
+
+        // State Machine
+        const state = {
+            currentSpotIndex: 0,
+            camX: ROOM_SPOTS[0].pos.x,
+            camZ: ROOM_SPOTS[0].pos.z,
+            eyeY: 1.6,
+            targetX: ROOM_SPOTS[0].pos.x,
+            targetZ: ROOM_SPOTS[0].pos.z,
+            isWalking: false,
+            stepBobPhase: 0,
+            yaw: ROOM_SPOTS[0].yaw,
+            pitch: ROOM_SPOTS[0].pitch,
+            targetYaw: ROOM_SPOTS[0].yaw,
+            targetPitch: ROOM_SPOTS[0].pitch,
+            isDragging: false,
+            previousMouseX: 0,
+            previousMouseY: 0,
+            pointerDownX: 0,
+            pointerDownY: 0,
+            isAutoTouring: false,
+            autoTourInterval: null,
+            audioEnabled: false,
+            audioCtx: null,
+            keys: { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false }
+        };
+
+        document.getElementById('total-locations-count').innerText = ROOM_SPOTS.length;
+
+        // Three.js Core Variables
+        let scene, camera, renderer;
+        let roomGroup;
+        let floorTargetMarker;
+        const hotspotMeshes = [];
+        const raycaster = new THREE.Raycaster();
+        const mouseVec = new THREE.Vector2();
+        const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+        function initThreeScene() {
+            const container = document.getElementById('viewport');
+            const canvas = document.getElementById('three-canvas');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1c1917);
+            scene.fog = new THREE.FogExp2(0x1c1917, 0.035);
+
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
+            updateCameraTransform();
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 0.85;
+
+            setupLighting();
+
+            roomGroup = new THREE.Group();
+            buildRoomWallsAndFloor();
+            buildSofaAndSeating();
+            buildCoffeeTableAndDetails();
+            buildBookshelfAndDesk();
+            buildPlantsAndDecor();
+            buildOppositeWallDoor();
+            buildFloorHotspots();
+            buildFloorTargetMarker();
+
+            scene.add(roomGroup);
+
+            window.addEventListener('resize', onWindowResize);
+            setupInputEventListeners(canvas);
+            renderDotsUI();
+        }
+
+        function setupLighting() {
+            const ambient = new THREE.AmbientLight(0xfff5ea, 0.55);
+            scene.add(ambient);
+
+            const hemiLight = new THREE.HemisphereLight(0xfff8f0, 0x221810, 0.35);
+            scene.add(hemiLight);
+
+            const windowLight = new THREE.DirectionalLight(0xffeedd, 1.4);
+            windowLight.position.set(6, 6, -2);
+            windowLight.castShadow = true;
+            windowLight.shadow.mapSize.width = 2048;
+            windowLight.shadow.mapSize.height = 2048;
+            windowLight.shadow.bias = -0.0005;
+            scene.add(windowLight);
+
+            const lampLight = new THREE.PointLight(0xffa726, 2.2, 9);
+            lampLight.position.set(-2.8, 2.2, 0.8);
+            scene.add(lampLight);
+
+            const deskLight = new THREE.PointLight(0xffc107, 1.5, 6);
+            deskLight.position.set(0.0, 1.8, -4.8);
+            scene.add(deskLight);
+        }
+
+        function buildRoomWallsAndFloor() {
+            const floorGeo = new THREE.PlaneGeometry(8, 11);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x8c5e3f,
+                roughness: 0.4,
+                metalness: 0.1
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            floor.name = 'room_floor';
+            roomGroup.add(floor);
+
+            const carpetGeo = new THREE.PlaneGeometry(4.8, 5.8);
+            const carpetMat = new THREE.MeshStandardMaterial({
+                color: 0xeee3d0,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+            const carpet = new THREE.Mesh(carpetGeo, carpetMat);
+            carpet.rotation.x = -Math.PI / 2;
+            carpet.position.set(0, 0.01, -0.5);
+            carpet.receiveShadow = true;
+            carpet.name = 'room_carpet';
+            roomGroup.add(carpet);
+
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0xf7f2e8, roughness: 0.8 });
+
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.5), wallMat);
+            backWall.position.set(0, 1.75, -5.5);
+            roomGroup.add(backWall);
+
+            const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(8, 3.5), wallMat);
+            frontWall.position.set(0, 1.75, 5.5);
+            frontWall.rotation.y = Math.PI;
+            roomGroup.add(frontWall);
+
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(11, 3.5), wallMat);
+            leftWall.position.set(-4, 1.75, 0);
+            leftWall.rotation.y = Math.PI / 2;
+            roomGroup.add(leftWall);
+
+            const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(11, 3.5), wallMat);
+            rightWall.position.set(4, 1.75, 0);
+            rightWall.rotation.y = -Math.PI / 2;
+            roomGroup.add(rightWall);
+
+            const windowGeo = new THREE.PlaneGeometry(4, 2.2);
+            const windowMat = new THREE.MeshBasicMaterial({ color: 0xfffbeb, transparent: true, opacity: 0.7 });
+            const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+            windowMesh.position.set(3.95, 1.9, -1.0);
+            windowMesh.rotation.y = -Math.PI / 2;
+            roomGroup.add(windowMesh);
+        }
+
+        function buildSofaAndSeating() {
+            const sofaGroup = new THREE.Group();
+            sofaGroup.position.set(-1.6, 0, -0.8);
+
+            const fabricMat = new THREE.MeshStandardMaterial({ color: 0x6c937d, roughness: 0.7 });
+            const cushionMat = new THREE.MeshStandardMaterial({ color: 0x8fae9c, roughness: 0.8 });
+
+            const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.35, 1.1), fabricMat);
+            sofaBase.position.y = 0.2;
+            sofaBase.castShadow = true;
+            sofaGroup.add(sofaBase);
+
+            const seatCushion1 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.25, 0.95), cushionMat);
+            seatCushion1.position.set(-0.58, 0.45, 0.05);
+            sofaGroup.add(seatCushion1);
+
+            const seatCushion2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.25, 0.95), cushionMat);
+            seatCushion2.position.set(0.58, 0.45, 0.05);
+            sofaGroup.add(seatCushion2);
+
+            const backrest = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 0.3), fabricMat);
+            backrest.position.set(0, 0.8, -0.4);
+            sofaGroup.add(backrest);
+
+            const armLeft = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.55, 1.1), fabricMat);
+            armLeft.position.set(-1.25, 0.55, 0.0);
+            sofaGroup.add(armLeft);
+
+            const armRight = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.55, 1.1), fabricMat);
+            armRight.position.set(1.25, 0.55, 0.0);
+            sofaGroup.add(armRight);
+
+            const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.15), new THREE.MeshStandardMaterial({ color: 0xd1b18a }));
+            pillow.position.set(-0.9, 0.65, -0.2);
+            pillow.rotation.z = 0.15;
+            sofaGroup.add(pillow);
+
+            roomGroup.add(sofaGroup);
+
+            const chairGroup = new THREE.Group();
+            chairGroup.position.set(1.6, 0, -0.2);
+            chairGroup.rotation.y = -Math.PI / 3.5;
+
+            const chairMat = new THREE.MeshStandardMaterial({ color: 0xd1b18a, roughness: 0.7 });
+            const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.35, 0.9), chairMat);
+            chairSeat.position.y = 0.2;
+            chairSeat.castShadow = true;
+            chairGroup.add(chairSeat);
+
+            const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 0.2), chairMat);
+            chairBack.position.set(0, 0.7, -0.35);
+            chairGroup.add(chairBack);
+
+            roomGroup.add(chairGroup);
+        }
+
+        function buildCoffeeTableAndDetails() {
+            const tableGroup = new THREE.Group();
+            tableGroup.position.set(0, 0, -0.5);
+
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0xbe9266, roughness: 0.5 });
+
+            const topMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 0.08, 32), woodMat);
+            topMesh.position.y = 0.48;
+            topMesh.castShadow = true;
+            tableGroup.add(topMesh);
+
+            for (let i = 0; i < 3; i++) {
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.48), woodMat);
+                const angle = (i * Math.PI * 2) / 3;
+                leg.position.set(Math.cos(angle) * 0.5, 0.24, Math.sin(angle) * 0.5);
+                tableGroup.add(leg);
+            }
+
+            const tissueBox = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.15), new THREE.MeshStandardMaterial({ color: 0xf7f2e8 }));
+            tissueBox.position.set(-0.2, 0.58, 0.1);
+            tableGroup.add(tissueBox);
+
+            const glassCup = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.06, 0.05, 0.14, 16),
+                new THREE.MeshStandardMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.6 })
+            );
+            glassCup.position.set(0.25, 0.59, -0.15);
+            tableGroup.add(glassCup);
+
+            roomGroup.add(tableGroup);
+
+            const lampGroup = new THREE.Group();
+            lampGroup.position.set(-2.8, 0, 0.8);
+
+            const lampPole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 2.2), woodMat);
+            lampPole.position.y = 1.1;
+            lampGroup.add(lampPole);
+
+            const shade = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.45, 0.4, 24, 1, true),
+                new THREE.MeshStandardMaterial({ color: 0xffedd5, side: THREE.DoubleSide })
+            );
+            shade.position.y = 2.1;
+            lampGroup.add(shade);
+
+            roomGroup.add(lampGroup);
+        }
+
+        function buildBookshelfAndDesk() {
+            const shelfGroup = new THREE.Group();
+            shelfGroup.position.set(-3.5, 0, -3.2);
+
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0x724b37, roughness: 0.6 });
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.4), shelfMat);
+            frame.position.y = 1.2;
+            shelfGroup.add(frame);
+
+            const bookColors = [0x527561, 0xbe9266, 0x8c5e3f, 0x332018, 0xd1b18a];
+            for (let layer = 0; layer < 4; layer++) {
+                for (let b = 0; b < 6; b++) {
+                    const bMat = new THREE.MeshStandardMaterial({ color: bookColors[(layer + b) % bookColors.length] });
+                    const book = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.22), bMat);
+                    book.position.set(-0.4 + b * 0.14, 0.35 + layer * 0.55, 0.0);
+                    shelfGroup.add(book);
+                }
+            }
+            roomGroup.add(shelfGroup);
+
+            const deskGroup = new THREE.Group();
+            deskGroup.position.set(0.0, 0, -4.8);
+
+            const deskTop = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.8), shelfMat);
+            deskTop.position.y = 0.72;
+            deskTop.castShadow = true;
+            deskGroup.add(deskTop);
+
+            for (let x of [-0.8, 0.8]) {
+                for (let z of [-0.3, 0.3]) {
+                    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.72), shelfMat);
+                    leg.position.set(x, 0.36, z);
+                    deskGroup.add(leg);
+                }
+            }
+
+            const deskLamp = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.22, 16), new THREE.MeshStandardMaterial({ color: 0xd1b18a }));
+            deskLamp.position.set(-0.5, 0.95, -0.1);
+            deskLamp.rotation.x = 0.3;
+            deskGroup.add(deskLamp);
+
+            roomGroup.add(deskGroup);
+        }
+
+        function buildPlantsAndDecor() {
+            const plantGroup = new THREE.Group();
+            plantGroup.position.set(3.2, 0, -4.2);
+
+            const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.6, 24), new THREE.MeshStandardMaterial({ color: 0xf7f2e8 }));
+            pot.position.y = 0.3;
+            plantGroup.add(pot);
+
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x527561, roughness: 0.4 });
+            for (let i = 0; i < 7; i++) {
+                const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), leafMat);
+                leaf.scale.set(1.4, 0.2, 0.8);
+                leaf.rotation.x = Math.random() * 0.5;
+                leaf.rotation.y = (i * Math.PI * 2) / 7;
+                leaf.position.set(Math.cos(leaf.rotation.y) * 0.25, 0.7 + Math.random() * 0.4, Math.sin(leaf.rotation.y) * 0.25);
+                plantGroup.add(leaf);
+            }
+            roomGroup.add(plantGroup);
+
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x724b37 });
+            const artMat = new THREE.MeshBasicMaterial({ color: 0x8fae9c });
+
+            const artFrame = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.0, 0.05), frameMat);
+            artFrame.position.set(1.8, 2.0, -5.45);
+            roomGroup.add(artFrame);
+
+            const artCanvas = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), artMat);
+            artCanvas.position.set(1.8, 2.0, -5.41);
+            roomGroup.add(artCanvas);
+        }
+
+        function buildOppositeWallDoor() {
+            const doorGroup = new THREE.Group();
+            doorGroup.position.set(3.92, 0, 1.8);
+            doorGroup.rotation.y = -Math.PI / 2;
+
+            const frameMat = new THREE.MeshStandardMaterial({ color: 0x5e3f30, roughness: 0.6 });
+            const panelMat = new THREE.MeshStandardMaterial({ color: 0x8c5e3f, roughness: 0.5 });
+            const brassMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.2, metalness: 0.8 });
+
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.3, 0.12), frameMat);
+            frame.position.set(0, 1.15, 0);
+            frame.castShadow = true;
+            doorGroup.add(frame);
+
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(1.06, 2.18, 0.06), panelMat);
+            panel.position.set(0, 1.12, 0);
+            panel.castShadow = true;
+            doorGroup.add(panel);
+
+            for (let yPos of [0.65, 1.55]) {
+                const inset = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.08), frameMat);
+                inset.position.set(0, yPos, 0);
+                doorGroup.add(inset);
+            }
+
+            const handleBase = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.02, 16), brassMat);
+            handleBase.rotation.x = Math.PI / 2;
+            handleBase.position.set(-0.38, 1.05, 0.05);
+            doorGroup.add(handleBase);
+
+            const handleLever = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.03), brassMat);
+            handleLever.position.set(-0.43, 1.05, 0.07);
+            doorGroup.add(handleLever);
+
+            const plaqueMat = new THREE.MeshStandardMaterial({ color: 0x332018, roughness: 0.3 });
+            const plaque = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, 0.02), plaqueMat);
+            plaque.position.set(0, 1.75, 0.04);
+            doorGroup.add(plaque);
+
+            doorGroup.traverse((child) => {
+                if (child.isMesh) child.userData = { isDoor: true };
+            });
+
+            roomGroup.add(doorGroup);
+        }
+
+        function buildFloorHotspots() {
+            ROOM_SPOTS.forEach((spot, index) => {
+                const hotspotGroup = new THREE.Group();
+                hotspotGroup.position.set(spot.pos.x, 0.02, spot.pos.z);
+
+                const ringGeo = new THREE.RingGeometry(0.25, 0.38, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: index === 0 ? 0xf7f2e8 : 0xbe9266,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                hotspotGroup.add(ring);
+
+                const orbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const orbMat = new THREE.MeshBasicMaterial({ color: 0xf7f2e8, transparent: true, opacity: 0.9 });
+                const orb = new THREE.Mesh(orbGeo, orbMat);
+                orb.position.y = 0.15;
+                hotspotGroup.add(orb);
+
+                hotspotGroup.userData = { spotIndex: index, ringMesh: ring };
+                scene.add(hotspotGroup);
+                hotspotMeshes.push(hotspotGroup);
+            });
+        }
+
+        function buildFloorTargetMarker() {
+            const ringGeo = new THREE.RingGeometry(0.1, 0.28, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xbe9266, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+            floorTargetMarker = new THREE.Mesh(ringGeo, ringMat);
+            floorTargetMarker.rotation.x = -Math.PI / 2;
+            floorTargetMarker.position.y = 0.015;
+            scene.add(floorTargetMarker);
+        }
+
+        function setupInputEventListeners(canvas) {
+            canvas.addEventListener('mousedown', (e) => {
+                state.isDragging = true;
+                state.previousMouseX = e.clientX;
+                state.previousMouseY = e.clientY;
+                state.pointerDownX = e.clientX;
+                state.pointerDownY = e.clientY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!state.isDragging) return;
+
+                const deltaX = e.clientX - state.previousMouseX;
+                const deltaY = e.clientY - state.previousMouseY;
+
+                state.targetYaw -= deltaX * 0.0035;
+                state.targetPitch -= deltaY * 0.0025;
+
+                const pitchLimit = Math.PI * 0.35;
+                state.targetPitch = Math.max(-pitchLimit, Math.min(pitchLimit, state.targetPitch));
+
+                state.previousMouseX = e.clientX;
+                state.previousMouseY = e.clientY;
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (!state.isDragging) return;
+                state.isDragging = false;
+
+                const distDragged = Math.hypot(e.clientX - state.pointerDownX, e.clientY - state.pointerDownY);
+                if (distDragged < 6) {
+                    handleGroundClick(e.clientX, e.clientY);
+                }
+            });
+
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    state.isDragging = true;
+                    state.previousMouseX = e.touches[0].clientX;
+                    state.previousMouseY = e.touches[0].clientY;
+                    state.pointerDownX = e.touches[0].clientX;
+                    state.pointerDownY = e.touches[0].clientY;
+                }
+            }, { passive: true });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (!state.isDragging || e.touches.length !== 1) return;
+
+                const deltaX = e.touches[0].clientX - state.previousMouseX;
+                const deltaY = e.touches[0].clientY - state.previousMouseY;
+
+                state.targetYaw -= deltaX * 0.004;
+                state.targetPitch -= deltaY * 0.003;
+
+                const pitchLimit = Math.PI * 0.35;
+                state.targetPitch = Math.max(-pitchLimit, Math.min(pitchLimit, state.targetPitch));
+
+                state.previousMouseX = e.touches[0].clientX;
+                state.previousMouseY = e.touches[0].clientY;
+            }, { passive: true });
+
+            canvas.addEventListener('touchend', (e) => {
+                if (!state.isDragging) return;
+                state.isDragging = false;
+
+                if (e.changedTouches.length > 0) {
+                    const touch = e.changedTouches[0];
+                    const distDragged = Math.hypot(touch.clientX - state.pointerDownX, touch.clientY - state.pointerDownY);
+                    if (distDragged < 8) {
+                        handleGroundClick(touch.clientX, touch.clientY);
+                    }
+                }
+            });
+
+            window.addEventListener('keydown', (e) => {
+                if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    state.keys[e.key] = true;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    state.keys[e.key] = false;
+                }
+            });
+
+            const setupMobileButton = (id, key) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.addEventListener('touchstart', (e) => { e.preventDefault(); state.keys[key] = true; });
+                btn.addEventListener('touchend', (e) => { e.preventDefault(); state.keys[key] = false; });
+                btn.addEventListener('mousedown', () => { state.keys[key] = true; });
+                btn.addEventListener('mouseup', () => { state.keys[key] = false; });
+            };
+            setupMobileButton('btn-walk-forward', 'w');
+            setupMobileButton('btn-walk-backward', 's');
+            setupMobileButton('btn-turn-left', 'a');
+            setupMobileButton('btn-turn-right', 'd');
+        }
+
+        function handleGroundClick(clientX, clientY) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouseVec.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            mouseVec.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouseVec, camera);
+
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            let clickedHotspotIndex = -1;
+            let clickedDoor = false;
+
+            for (let hit of intersects) {
+                let obj = hit.object;
+                while (obj && obj.parent && obj.parent !== scene) {
+                    if (obj.userData && obj.userData.isDoor) {
+                        clickedDoor = true;
+                        break;
+                    }
+                    if (obj.userData && typeof obj.userData.spotIndex === 'number') {
+                        clickedHotspotIndex = obj.userData.spotIndex;
+                        break;
+                    }
+                    obj = obj.parent;
+                }
+                if (clickedHotspotIndex !== -1 || clickedDoor) break;
+            }
+
+            if (clickedDoor) {
+                showDoorClosedHint();
+                spawnClickEffect(clientX, clientY);
+                return;
+            }
+
+            if (clickedHotspotIndex !== -1) {
+                goToSpot(clickedHotspotIndex);
+                spawnClickEffect(clientX, clientY);
+                return;
+            }
+
+            const ray = raycaster.ray;
+            const targetIntersection = new THREE.Vector3();
+            if (ray.intersectPlane(floorPlane, targetIntersection)) {
+                const clampedX = Math.max(-3.5, Math.min(3.5, targetIntersection.x));
+                const clampedZ = Math.max(-4.8, Math.min(4.8, targetIntersection.z));
+
+                state.targetX = clampedX;
+                state.targetZ = clampedZ;
+                state.isWalking = true;
+
+                floorTargetMarker.position.set(clampedX, 0.015, clampedZ);
+                floorTargetMarker.material.opacity = 0.9;
+
+                spawnClickEffect(clientX, clientY);
+                playCalmChime(state.currentSpotIndex);
+
+                updateClosestSpotIndex(clampedX, clampedZ);
+            }
+        }
+
+        function updateClosestSpotIndex(x, z) {
+            let closestIdx = 0;
+            let minDistance = Infinity;
+            ROOM_SPOTS.forEach((spot, idx) => {
+                const dist = Math.hypot(spot.pos.x - x, spot.pos.z - z);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestIdx = idx;
+                }
+            });
+            if (closestIdx !== state.currentSpotIndex) {
+                state.currentSpotIndex = closestIdx;
+                updateUI();
+                updateHotspotHighlights();
+            }
+        }
+
+        function goToSpot(index) {
+            if (index < 0) index = ROOM_SPOTS.length - 1;
+            if (index >= ROOM_SPOTS.length) index = 0;
+
+            state.currentSpotIndex = index;
+            const spot = ROOM_SPOTS[index];
+
+            state.targetX = spot.pos.x;
+            state.targetZ = spot.pos.z;
+            state.targetYaw = spot.yaw;
+            state.targetPitch = spot.pitch;
+            state.isWalking = true;
+
+            floorTargetMarker.position.set(spot.pos.x, 0.015, spot.pos.z);
+            floorTargetMarker.material.opacity = 0.8;
+
+            playCalmChime(index);
+            updateUI();
+            updateHotspotHighlights();
+        }
+
+        function updateHotspotHighlights() {
+            hotspotMeshes.forEach((group, idx) => {
+                const isCurrent = idx === state.currentSpotIndex;
+                if (group.userData.ringMesh) {
+                    group.userData.ringMesh.material.color.setHex(isCurrent ? 0xf7f2e8 : 0xbe9266);
+                    group.userData.ringMesh.material.opacity = isCurrent ? 1.0 : 0.5;
+                }
+            });
+        }
+
+        function renderDotsUI() {
+            const container = document.getElementById('spots-dots-container');
+            container.innerHTML = '';
+            ROOM_SPOTS.forEach((_, idx) => {
+                const dot = document.createElement('button');
+                dot.className = `w-2 h-2 rounded-full transition-all ${idx === state.currentSpotIndex ? 'w-5 bg-warm-400' : 'bg-stone-700 hover:bg-stone-500'}`;
+                dot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    goToSpot(idx);
+                });
+                container.appendChild(dot);
+            });
+        }
+
+        function updateUI() {
+            const spot = ROOM_SPOTS[state.currentSpotIndex];
+
+            document.getElementById('location-index-text').innerText = state.currentSpotIndex + 1;
+
+            const card = document.getElementById('reflection-card');
+            card.classList.add('translate-y-2', 'opacity-70');
+
+            setTimeout(() => {
+                document.getElementById('spot-tag').innerText = spot.tag;
+                document.getElementById('spot-mood').innerText = spot.mood;
+                document.getElementById('spot-title').innerText = spot.title;
+                document.getElementById('spot-body').innerText = spot.body;
+                document.getElementById('tip-title').innerText = spot.tipTitle;
+                document.getElementById('tip-desc').innerText = spot.tipDesc;
+
+                card.classList.remove('translate-y-2', 'opacity-70');
+                renderDotsUI();
+            }, 120);
+
+            const hint = document.getElementById('hotspot-hint');
+            document.getElementById('hotspot-text').innerText = `已到達：${spot.title}`;
+            hint.classList.remove('opacity-0');
+            setTimeout(() => hint.classList.add('opacity-0'), 2200);
+        }
+
+        function showDoorClosedHint() {
+            const hint = document.getElementById('hotspot-hint');
+            document.getElementById('hotspot-text').innerText = '🔒 諮商室大門目前關閉中（請安心在室內休息）';
+            hint.classList.remove('opacity-0');
+            setTimeout(() => hint.classList.add('opacity-0'), 2500);
+        }
+
+        function spawnClickEffect(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'click-ripple';
+            const size = 50;
+            ripple.style.width = size + 'px';
+            ripple.style.height = size + 'px';
+            ripple.style.left = (x - size / 2) + 'px';
+            ripple.style.top = (y - size / 2) + 'px';
+            document.body.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 600);
+        }
+
+        function initAudio() {
+            if (!state.audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                state.audioCtx = new AudioContext();
+            }
+            if (state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume();
+            }
+        }
+
+        const PENTATONIC_FREQS = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25];
+
+        function playCalmChime(index) {
+            if (!state.audioEnabled || !state.audioCtx) return;
+            try {
+                const now = state.audioCtx.currentTime;
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+
+                const freq = PENTATONIC_FREQS[index % PENTATONIC_FREQS.length];
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now);
+
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.12, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+
+                osc.connect(gain);
+                gain.connect(state.audioCtx.destination);
+
+                osc.start(now);
+                osc.stop(now + 1.8);
+            } catch (e) {
+                console.error("Audio chime error:", e);
+            }
+        }
+
+        function updateCameraTransform() {
+            camera.position.set(state.camX, state.eyeY, state.camZ);
+
+            const lookX = state.camX + Math.sin(state.yaw) * Math.cos(state.pitch);
+            const lookY = state.eyeY + Math.sin(state.pitch);
+            const lookZ = state.camZ - Math.cos(state.yaw) * Math.cos(state.pitch);
+
+            camera.lookAt(lookX, lookY, lookZ);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('viewport');
+            if (!container || !renderer || !camera) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            state.yaw += (state.targetYaw - state.yaw) * 0.1;
+            state.pitch += (state.targetPitch - state.pitch) * 0.1;
+
+            let moveForward = 0;
+            let moveSide = 0;
+            if (state.keys.w || state.keys.ArrowUp) moveForward += 1;
+            if (state.keys.s || state.keys.ArrowDown) moveForward -= 1;
+            if (state.keys.a || state.keys.ArrowLeft) moveSide -= 1;
+            if (state.keys.d || state.keys.ArrowRight) moveSide += 1;
+
+            if (moveForward !== 0 || moveSide !== 0) {
+                const speed = 0.045;
+                const sinY = Math.sin(state.yaw);
+                const cosY = Math.cos(state.yaw);
+
+                state.targetX += (sinY * moveForward + cosY * moveSide) * speed;
+                state.targetZ += (-cosY * moveForward + sinY * moveSide) * speed;
+
+                state.targetX = Math.max(-3.5, Math.min(3.5, state.targetX));
+                state.targetZ = Math.max(-4.8, Math.min(4.8, state.targetZ));
+                state.isWalking = true;
+            }
+
+            const dist = Math.hypot(state.targetX - state.camX, state.targetZ - state.camZ);
+            if (dist > 0.02) {
+                state.camX += (state.targetX - state.camX) * 0.08;
+                state.camZ += (state.targetZ - state.camZ) * 0.08;
+                state.stepBobPhase += 0.12;
+                state.eyeY = 1.6 + Math.sin(state.stepBobPhase) * 0.035;
+            } else {
+                state.camX = state.targetX;
+                state.camZ = state.targetZ;
+                state.eyeY = 1.6;
+                state.isWalking = false;
+                if (floorTargetMarker && floorTargetMarker.material.opacity > 0) {
+                    floorTargetMarker.material.opacity = Math.max(0, floorTargetMarker.material.opacity - 0.03);
+                }
+            }
+
+            updateCameraTransform();
+
+            hotspotMeshes.forEach(group => {
+                if (group.userData.ringMesh) {
+                    group.userData.ringMesh.rotation.z += 0.01;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        function setupUIEventListeners() {
+            document.getElementById('prev-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToSpot(state.currentSpotIndex - 1);
+            });
+
+            document.getElementById('next-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                goToSpot(state.currentSpotIndex + 1);
+            });
+
+            const autotourBtn = document.getElementById('autotour-btn');
+            autotourBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                state.isAutoTouring = !state.isAutoTouring;
+                const icon = document.getElementById('autotour-icon');
+                const text = document.getElementById('autotour-text');
+
+                if (state.isAutoTouring) {
+                    text.innerText = "停止巡航";
+                    icon.setAttribute('data-lucide', 'pause');
+                    autotourBtn.classList.add('bg-warm-500/20', 'border-warm-400/50', 'text-warm-300');
+                    state.autoTourInterval = setInterval(() => {
+                        goToSpot(state.currentSpotIndex + 1);
+                    }, 5000);
+                } else {
+                    text.innerText = "自動巡航";
+                    icon.setAttribute('data-lucide', 'play');
+                    autotourBtn.classList.remove('bg-warm-500/20', 'border-warm-400/50', 'text-warm-300');
+                    clearInterval(state.autoTourInterval);
+                }
+                if (window.lucide) lucide.createIcons();
+            });
+
+            const audioBtn = document.getElementById('audio-toggle');
+            audioBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                initAudio();
+                state.audioEnabled = !state.audioEnabled;
+
+                const icon = document.getElementById('audio-icon');
+                if (state.audioEnabled) {
+                    icon.setAttribute('data-lucide', 'volume-2');
+                    audioBtn.classList.add('text-warm-300', 'border-warm-400/50');
+                } else {
+                    icon.setAttribute('data-lucide', 'volume-x');
+                    audioBtn.classList.remove('text-warm-300', 'border-warm-400/50');
+                }
+                if (window.lucide) lucide.createIcons();
+            });
+
+            const infoModal = document.getElementById('info-modal');
+            const infoToggle = document.getElementById('info-toggle');
+            const closeInfo = document.getElementById('close-info');
+
+            infoToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                infoModal.classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('info-modal-content').classList.remove('scale-95');
+            });
+
+            closeInfo.addEventListener('click', () => {
+                infoModal.classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('info-modal-content').classList.add('scale-95');
+            });
+
+            infoModal.addEventListener('click', (e) => {
+                if (e.target === infoModal) {
+                    infoModal.classList.add('opacity-0', 'pointer-events-none');
+                }
+            });
+        }
+
+        // Window Onload Initialization
+        window.onload = function() {
+            if (window.lucide) lucide.createIcons();
+            initThreeScene();
+            setupUIEventListeners();
+            updateUI();
+            updateHotspotHighlights();
+            animate();
+
+            setTimeout(() => {
+                const hint = document.getElementById('controls-hint');
+                if (hint) hint.classList.add('opacity-0');
+            }, 6000);
+        };
+    </script>
+</body>
+</html>
